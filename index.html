@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Вопросик к тебе... ❤️</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Comfortaa', cursive;
+            background-color: #ffe4e6;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            touch-action: none; 
+        }
+
+        #no-btn:active {
+            transform: none !important;
+        }
+
+        .btn-fast-transition { transition: all 0.1s ease-out; }
+        
+        .shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 0, 0); }
+            20%, 80% { transform: translate3d(4px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+            40%, 60% { transform: translate3d(6px, 0, 0); }
+        }
+
+        canvas {
+            background: #fff0f5;
+            border: 4px solid #f472b6;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center relative select-none">
+
+    <!-- ГЛАВНЫЙ ЭКРАН -->
+    <div id="main-container" class="text-center z-10 px-4 transition-all duration-500 w-full max-w-4xl">
+        <div class="mb-8 h-48 flex items-center justify-center">
+            <img id="cat-img" 
+                 src="https://media.tenor.com/K2sE88y2SjoAAAAi/mochi-cat.gif" 
+                 alt="Cute cat" 
+                 class="h-48 w-auto object-contain rounded-lg drop-shadow-xl transition-all duration-300">
+        </div>
+
+        <h1 id="question" class="text-3xl md:text-5xl font-bold text-pink-600 mb-8 drop-shadow-sm leading-tight">
+            Ты будешь моей валентинкой? 💖
+        </h1>
+
+        <div class="flex flex-wrap justify-center gap-6 items-center relative w-full h-32">
+            <button id="yes-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-full text-xl shadow-lg transform transition-all duration-300 z-20 whitespace-nowrap">
+                Да! 🥰
+            </button>
+            <button id="no-btn" class="bg-red-400 text-white font-bold py-3 px-8 rounded-full text-xl shadow-lg btn-fast-transition z-30 absolute md:relative cursor-pointer">
+                Нет 🗿
+            </button>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА (Используется и для троллинга, и для бонуса) -->
+    <div id="game-offer-modal" class="hidden fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
+        <div id="game-offer-content" class="bg-white rounded-2xl p-8 max-w-md text-center shadow-2xl transform scale-100 transition-transform border-4 border-pink-200">
+            <!-- Контент меняется скриптом -->
+        </div>
+    </div>
+
+    <!-- ЭКРАН ИГРЫ -->
+    <div id="game-container" class="hidden fixed inset-0 bg-pink-50 z-[80] flex flex-col items-center justify-center">
+        <div class="flex justify-between w-full max-w-md px-4 mb-2">
+            <span class="text-pink-600 font-bold text-xl">Сердечки: <span id="score">0</span>/10 ❤️</span>
+            <button onclick="quitGame()" class="text-gray-400 hover:text-pink-500 underline text-sm transition-colors">Я сдаюсь (Закрыть)</button>
+        </div>
+        <canvas id="gameCanvas" width="320" height="320"></canvas>
+        <p class="mt-4 text-gray-500 text-sm">Управление: Свайпы по экрану 👆 или Стрелочки ⌨️</p>
+        
+        <div id="mobile-controls" class="mt-4 grid grid-cols-3 gap-2 md:hidden opacity-30 hover:opacity-100 transition-opacity">
+             <div></div>
+             <button class="bg-pink-300 p-4 rounded-full active:bg-pink-400 touch-manipulation" id="up-btn">⬆️</button>
+             <div></div>
+             <button class="bg-pink-300 p-4 rounded-full active:bg-pink-400 touch-manipulation" id="left-btn">⬅️</button>
+             <button class="bg-pink-300 p-4 rounded-full active:bg-pink-400 touch-manipulation" id="down-btn">⬇️</button>
+             <button class="bg-pink-300 p-4 rounded-full active:bg-pink-400 touch-manipulation" id="right-btn">➡️</button>
+        </div>
+    </div>
+
+    <!-- ЭКРАН ФИНАЛА (УСПЕХ) -->
+    <div id="success-container" class="hidden fixed inset-0 bg-white/95 z-[60] flex flex-col items-center justify-center text-center animate-bounce p-4">
+        <img src="https://media.tenor.com/gUiu1zyxfzYAAAAi/bear-kiss-bear-kisses.gif" alt="Love bears" class="h-64 w-auto mb-6 rounded-lg shadow-2xl">
+        <h1 id="final-title" class="text-3xl md:text-5xl font-bold text-pink-600 mb-4">Урааа! 🎉</h1>
+        <p id="final-text" class="text-xl text-gray-700">Соняш, ура! ❤️<br>Твой Козлик очень рад! 🐐</p>
+    </div>
+
+    <script>
+        // --- ПЕРЕМЕННЫЕ UI ---
+        const yesBtn = document.getElementById('yes-btn');
+        const noBtn = document.getElementById('no-btn');
+        const catImg = document.getElementById('cat-img');
+        const mainContainer = document.getElementById('main-container');
+        const gameOfferModal = document.getElementById('game-offer-modal');
+        const gameOfferContent = document.getElementById('game-offer-content');
+        const gameContainer = document.getElementById('game-container');
+        const successContainer = document.getElementById('success-container');
+        const finalText = document.getElementById('final-text');
+        const finalTitle = document.getElementById('final-title');
+        
+        // --- ЛОГИКА ТРОЛЛИНГА ---
+        let noCount = 0;
+        let yesScale = 1;
+        let gamePlayed = false; 
+        
+        const noTexts = [
+            "Ты уверена? 🥺", "Подумай хорошенько! 🌹", "Я же милашка! 🐈", "Ну пожааалуйста! 🙏", 
+            "Сердечко болит! 💔", "Не нажимай меня! 😭", "Я куплю вкусняшки! 🍫", "Будет весело! 🎉", 
+            "Ну давай уже ДА! 🥰", "Еще одна попытка...", "Ты разбиваешь мне сердце...", 
+            "Котик плачет... 😿", "Не будь букой! 🌸", "Последний шанс! ✨", "Ну всё, держись! 🎮" 
+        ];
+
+        const images = {
+            default: "https://media.tenor.com/K2sE88y2SjoAAAAi/mochi-cat.gif",
+            sad: "https://media.tenor.com/1-A2kZc_mQ0AAAAi/mochi-cat-chibird.gif",
+            cry: "https://media.tenor.com/P593gHaa-8AAAAAi/mochi-cat-cry.gif",
+            beg: "https://media.tenor.com/N2s45842fycAAAAi/mochi-cat-mochi.gif" 
+        };
+
+        // --- ЛОГИКА "ДА" (Победа и Бонус) ---
+        function acceptValentine(isWin = false) {
+            gameOfferModal.classList.add('hidden');
+            gameContainer.classList.add('hidden');
+            mainContainer.classList.add('hidden'); 
+            
+            successContainer.classList.remove('hidden');
+            successContainer.classList.add('flex');
+            
+            launchConfetti();
+
+            if (isWin) {
+                // Если выиграла в игру
+                finalTitle.innerText = "СОНЯШ, ТЫ ВЫИГРАЛА! 🏆";
+                finalText.innerHTML = "Твой приз — <b>Твой Козлик!</b> 🐐❤️<br>(Специально для Соняша!)";
+                gamePlayed = true; 
+            } else {
+                // Обычное согласие
+                finalTitle.innerText = "Урааа! 🎉";
+                finalText.innerHTML = "Соняш, ура! ❤️<br>Твой Козлик очень рад! 🐐";
+
+                // ПРЕДЛОЖЕНИЕ БОНУСА (через 4 сек), если еще не играли и не дошли до конца троллинга
+                if (!gamePlayed && noCount < 15) {
+                    setTimeout(offerBonusGame, 4000);
+                }
+            }
+        }
+
+        yesBtn.addEventListener('click', () => acceptValentine(false));
+
+        // 1. Показываем предложение бонуса
+        function offerBonusGame() {
+            gameOfferContent.innerHTML = `
+                <h2 class="text-2xl font-bold text-pink-600 mb-4">Секретный уровень! 🎁</h2>
+                <p class="text-gray-700 mb-6 text-lg">Ты согласилась (Ура!), но...<br>Хочешь получить <strong>секретный приз</strong>?<br>Выиграй в игру прямо сейчас! 🐍</p>
+                <div class="flex flex-col gap-3">
+                    <button onclick="startBonusGame()" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-transform active:scale-95">
+                        🎁 Играть ради приза
+                    </button>
+                    <button onclick="rejectBonusGame()" class="bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-3 px-6 rounded-xl shadow-lg transition-transform active:scale-95">
+                        🥰 Мне хватит и тебя
+                    </button>
+                </div>
+            `;
+            gameOfferModal.classList.remove('hidden');
+        }
+
+        // 2. Если отказалась от бонуса -> Троллим и заставляем играть
+        function rejectBonusGame() {
+            gameOfferModal.classList.add('hidden');
+            
+            // Пауза 2.5 секунды, чтобы она расслабилась
+            setTimeout(() => {
+                gameOfferContent.innerHTML = `
+                    <h2 class="text-2xl font-bold text-pink-600 mb-4">А вот и нет! 🌚</h2>
+                    <p class="text-gray-700 mb-6 text-lg">Приз тоже будет!<br><b>А игру я что ли зря кодил? 🤨</b><br>Ну-ка быстро играть!</p>
+                    <div class="flex justify-center">
+                        <button onclick="startBonusGame()" class="bg-pink-500 hover:bg-pink-600 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition-transform active:scale-95 w-full">
+                            🐍 Ладно, уговорил...
+                        </button>
+                    </div>
+                `;
+                gameOfferModal.classList.remove('hidden');
+            }, 2500);
+        }
+
+        // 3. Предложение игры при троллинге "Нет" (на 15-й раз)
+        function showTrollModal() {
+            gameOfferContent.innerHTML = `
+                <h2 class="text-2xl font-bold text-pink-600 mb-4">Ого, какая ты настойчивая! 😲</h2>
+                <p class="text-gray-700 mb-6 text-lg">Ну ладно! Давай так: если соберешь <strong>10 сердец</strong> в игре, я отстану. По рукам? 😉</p>
+                <div class="flex flex-col gap-3">
+                    <button onclick="startGame()" class="bg-blue-400 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-transform active:scale-95">
+                        🎮 Играть (Шанс на отказ)
+                    </button>
+                    <button onclick="acceptValentine()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-transform active:scale-95">
+                        🥰 Всё, я согласна!
+                    </button>
+                </div>
+            `;
+            gameOfferModal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            gameOfferModal.classList.add('hidden');
+        }
+
+        function startBonusGame() {
+            gamePlayed = true; 
+            startGame();
+        }
+
+        function launchConfetti() {
+            var duration = 3000;
+            var end = Date.now() + duration;
+            (function frame() {
+                confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#ff0000', '#ff69b4', '#ffffff'] });
+                confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#ff0000', '#ff69b4', '#ffffff'] });
+                if (Date.now() < end) requestAnimationFrame(frame);
+            }());
+        }
+
+        // --- ЛОГИКА ТРОЛЛИНГА ---
+        function trollNo(e) {
+            if(e) { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }
+            if (navigator.vibrate) navigator.vibrate(50);
+
+            noCount++;
+
+            if (noCount === 1) {
+                noBtn.classList.add('shake');
+                noBtn.innerText = noTexts[0];
+                catImg.src = images.sad;
+                setTimeout(() => noBtn.classList.remove('shake'), 500);
+                return;
+            }
+
+            yesScale = Math.pow(1.15, noCount); 
+            yesBtn.style.transform = `scale(${yesScale})`;
+
+            const textIndex = Math.min(noCount - 1, noTexts.length - 1);
+            noBtn.innerText = noTexts[textIndex];
+
+            if (noCount === 2) catImg.src = images.cry;
+            if (noCount >= 8) catImg.src = images.beg;
+
+            const maxX = window.innerWidth - noBtn.offsetWidth - 20;
+            const maxY = window.innerHeight - noBtn.offsetHeight - 120; 
+            const randomX = Math.max(10, Math.random() * maxX);
+            const randomY = Math.max(10, Math.random() * maxY);
+
+            noBtn.style.position = 'fixed';
+            noBtn.style.left = `${randomX}px`;
+            noBtn.style.top = `${randomY}px`;
+            noBtn.style.zIndex = '100';
+
+            if (noCount === 15) {
+                noBtn.style.display = 'none';
+                setTimeout(showTrollModal, 300);
+            }
+        }
+
+        noBtn.addEventListener('mouseover', trollNo);
+        noBtn.addEventListener('click', trollNo);
+        noBtn.addEventListener('touchstart', trollNo);
+
+        // --- ИГРА ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        
+        let snake = [{x: 10, y: 10}];
+        let food = {x: 15, y: 15};
+        let dx = 0; let dy = 0;
+        let score = 0;
+        let gameInterval;
+        let gridSize = 20;
+        let tileCount = canvas.width / gridSize;
+
+        function startGame() {
+            gameOfferModal.classList.add('hidden');
+            gameContainer.classList.remove('hidden');
+            resetGame();
+            gameInterval = setInterval(gameLoop, 140); 
+        }
+
+        function quitGame() {
+            gameContainer.classList.add('hidden');
+            clearInterval(gameInterval); // Stop loop when quitting
+            acceptValentine(false); 
+        }
+
+        function resetGame() {
+            snake = [{x: 8, y: 8}];
+            dx = 1; dy = 0; 
+            score = 0;
+            scoreElement.innerText = score;
+            placeFood();
+        }
+
+        function placeFood() {
+            food.x = Math.floor(Math.random() * tileCount);
+            food.y = Math.floor(Math.random() * tileCount);
+            // Check if food spawns on snake body
+            snake.forEach(segment => {
+                if (segment.x === food.x && segment.y === food.y) placeFood();
+            });
+        }
+
+        function gameLoop() {
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+            if (head.x < 0) head.x = tileCount - 1;
+            if (head.x >= tileCount) head.x = 0;
+            if (head.y < 0) head.y = tileCount - 1;
+            if (head.y >= tileCount) head.y = 0;
+
+            for (let i = 0; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    resetGame(); 
+                    return;
+                }
+            }
+
+            snake.unshift(head);
+
+            if (head.x === food.x && head.y === food.y) {
+                score++;
+                scoreElement.innerText = score;
+                if (score >= 10) {
+                    clearInterval(gameInterval);
+                    setTimeout(() => acceptValentine(true), 200); 
+                }
+                placeFood();
+            } else {
+                snake.pop();
+            }
+            draw();
+        }
+
+        function draw() {
+            ctx.fillStyle = '#fff0f5';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw food
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('❤️', food.x * gridSize + gridSize/2, food.y * gridSize + gridSize/2 + 2);
+
+            // Draw snake
+            snake.forEach((segment, index) => {
+                ctx.fillStyle = index === 0 ? '#ec4899' : '#f472b6';
+                ctx.beginPath();
+                ctx.roundRect(segment.x * gridSize + 1, segment.y * gridSize + 1, gridSize - 2, gridSize - 2, 4);
+                ctx.fill();
+            });
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (gameContainer.classList.contains('hidden')) return;
+            switch(e.key) {
+                case 'ArrowUp': if (dy !== 1) { dx = 0; dy = -1; } break;
+                case 'ArrowDown': if (dy !== -1) { dx = 0; dy = 1; } break;
+                case 'ArrowLeft': if (dx !== 1) { dx = -1; dy = 0; } break;
+                case 'ArrowRight': if (dx !== -1) { dx = 1; dy = 0; } break;
+            }
+        });
+
+        // Mobile Controls Buttons
+        document.getElementById('up-btn').onclick = (e) => { e.preventDefault(); if (dy !== 1) { dx = 0; dy = -1; } };
+        document.getElementById('down-btn').onclick = (e) => { e.preventDefault(); if (dy !== -1) { dx = 0; dy = 1; } };
+        document.getElementById('left-btn').onclick = (e) => { e.preventDefault(); if (dx !== 1) { dx = -1; dy = 0; } };
+        document.getElementById('right-btn').onclick = (e) => { e.preventDefault(); if (dx !== -1) { dx = 1; dy = 0; } };
+
+        // Swipe Controls
+        let touchStartX = 0;
+        let touchStartY = 0;
+        canvas.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; e.preventDefault(); }, {passive: false});
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); }, {passive: false});
+        canvas.addEventListener('touchend', (e) => {
+            if (gameContainer.classList.contains('hidden')) return;
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            const diffX = touchEndX - touchStartX;
+            const diffY = touchEndY - touchStartY;
+            
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                if (diffX > 0 && dx !== -1) { dx = 1; dy = 0; } 
+                else if (diffX < 0 && dx !== 1) { dx = -1; dy = 0; }
+            } else {
+                if (diffY > 0 && dy !== -1) { dx = 0; dy = 1; } 
+                else if (diffY < 0 && dy !== 1) { dx = 0; dy = -1; } 
+            }
+        });
+
+    </script>
+</body>
+</html>
